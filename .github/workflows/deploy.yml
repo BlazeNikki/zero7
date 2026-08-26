@@ -1,0 +1,32 @@
+name: Build and Deploy
+on:
+  schedule:
+    - cron: '0 3 * * *'   # раз в сутки в 03:00 UTC (08:00 по Алматы)
+  workflow_dispatch:        # позволяет запускать вручную из вкладки Actions
+  push:
+    branches: [ main ]      # деплой также при каждом пуше в main
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+      - name: Build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://arfnwjuxqidefuxgbzyw.supabase.co
+          VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFyZm53anV4cWlkZWZ1eGdienl3Iiwicm9sIjoiYW5vbiIsImlhdCI6MTc4NjUyODA1OCwiZXhwIjoyMTAyMTA0MDU4fQ.ceVL34t3fk7dU-FQVMYHG8xobknNy2sNU9Kp-oRCfDU
+          VITE_DIRECTUS_URL: https://admin.nrg-travel.com
+      - name: Publish dist to deploy branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: deploy
+          force_orphan: true
