@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Search, Bell, ChevronDown, User, Menu, X, Wallet } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
+import NetworkSelector from './NetworkSelector';
 import SearchModal from './SearchModal';
 import { useWallet, openWalletModal } from '@/lib/wallet';
 
@@ -90,6 +91,7 @@ export default function Header({
 
         {/* Right — desktop */}
         <div className="hidden md:flex items-center gap-4 shrink-0">
+          <NetworkSelector />
           <LanguageSwitcher />
           <button onClick={() => setSearchOpen(true)} className="text-white/30 hover:text-white transition-colors">
             <Search size={19} strokeWidth={2} />

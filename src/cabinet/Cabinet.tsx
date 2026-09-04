@@ -12,6 +12,9 @@ import {
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { fetchCabinetData, type CabinetData } from './data';
 import { useWallet, openWalletModal } from '@/lib/wallet';
+import { useNetwork } from '@/lib/network-context';
+import { NETWORK_LABELS } from '@/lib/solana-bet';
+import NetworkSelector from '@/components/NetworkSelector';
 import { createContext, useContext } from 'react';
 
 // ===== Cabinet data context =====
@@ -53,6 +56,7 @@ function BalanceCard({ label, value, sub, accent }: { label: string; value: stri
 // ===== Section 1: Dashboard =====
 function Dashboard({ go }: { go: (s: string) => void }) {
   const wallet = useWallet();
+  const { network } = useNetwork();
   const { userProfile, balances, bonuses } = useCabinetData();
   return (
     <div>
@@ -77,8 +81,12 @@ function Dashboard({ go }: { go: (s: string) => void }) {
       </Card>
 
       {/* Balances */}
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-white/30 text-[10px] font-bold tracking-wider uppercase">Сеть</span>
+        <NetworkSelector />
+      </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        <BalanceCard label="Крипто-кошелёк" value={wallet.isConnected ? `${wallet.balance} ${wallet.chain === 'solana' ? 'SOL' : 'ETH'}` : 'Не подключён'} sub={wallet.isConnected ? (wallet.balanceUsd || undefined) : 'Solflare'} accent={wallet.isConnected ? 'text-emerald-400' : 'text-white/40'} />
+        <BalanceCard label={`Крипто-кошелёк · ${NETWORK_LABELS[network]}`} value={wallet.isConnected ? `${wallet.balance} ${wallet.chain === 'solana' ? 'SOL' : 'ETH'}` : 'Не подключён'} sub={wallet.isConnected ? (wallet.balanceUsd || undefined) : 'Solflare'} accent={wallet.isConnected ? 'text-emerald-400' : 'text-white/40'} />
         <BalanceCard label="Бонусный баланс" value={`${balances.bonus.toFixed(3)} SOL`} accent="text-amber-400" />
         <BalanceCard label="Фриспины" value={`${balances.freespins}`} sub="доступно" accent="text-sky-400" />
         <BalanceCard label="VIP Points" value={`${balances.vipPoints.toLocaleString('ru-RU')}`} sub="очков" accent="text-emerald-400" />
@@ -125,12 +133,17 @@ function Dashboard({ go }: { go: (s: string) => void }) {
 // ===== Section 2: Balance =====
 function BalanceSection({ toast }: { toast: (t: string) => void }) {
   const wallet = useWallet();
+  const { network } = useNetwork();
   const { balances } = useCabinetData();
   return (
     <div>
       <SectionTitle icon={Wallet}>Баланс</SectionTitle>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-white/30 text-[10px] font-bold tracking-wider uppercase">Сеть</span>
+        <NetworkSelector />
+      </div>
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-        <BalanceCard label="Solflare кошелёк" value={wallet.isConnected ? `${wallet.balance} ${wallet.chain === 'solana' ? 'SOL' : 'ETH'}` : 'Не подключён'} sub={wallet.isConnected ? (wallet.balanceUsd || wallet.displayAddress || undefined) : 'Нажмите для подключения'} accent={wallet.isConnected ? 'text-emerald-400' : 'text-white/40'} />
+        <BalanceCard label={`Solflare кошелёк · ${NETWORK_LABELS[network]}`} value={wallet.isConnected ? `${wallet.balance} ${wallet.chain === 'solana' ? 'SOL' : 'ETH'}` : 'Не подключён'} sub={wallet.isConnected ? (wallet.balanceUsd || wallet.displayAddress || undefined) : 'Нажмите для подключения'} accent={wallet.isConnected ? 'text-emerald-400' : 'text-white/40'} />
         <BalanceCard label="Бонусный баланс" value={`${balances.bonus.toFixed(3)} SOL`} accent="text-amber-400" />
         <BalanceCard label="Средства в обработке" value={`${balances.inProcessing.toFixed(3)} SOL`} accent="text-amber-400" />
         <BalanceCard label="Всего депозитов" value={`${balances.totalDeposits.toFixed(3)} SOL`} accent="text-emerald-400" />
