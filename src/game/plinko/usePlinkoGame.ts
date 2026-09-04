@@ -7,7 +7,7 @@ import {
 let ballIdCounter = 0;
 
 export function usePlinkoGame() {
-  const [betAmount, setBetAmount] = useState(100);
+  const [betAmount, setBetAmount] = useState(0.01);
   const [rows, setRows] = useState<Rows>(12);
   const [risk, setRisk] = useState<Risk>('medium');
   const [balls, setBalls] = useState<Ball[]>([]);
@@ -175,10 +175,10 @@ export function usePlinkoGame() {
 
   const quickAmount = useCallback((type: 'half' | 'double' | 'min' | 'max') => {
     setBetAmount((prev) => {
-      if (type === 'half') return Math.max(MIN_BET, Math.floor(prev / 2));
-      if (type === 'double') return Math.min(MAX_BET, prev * 2);
-      if (type === 'min') return MIN_BET;
-      return MAX_BET;
+      if (type === 'half') return Math.max(0.001, Math.floor(prev / 2 * 1000) / 1000);
+      if (type === 'double') return Math.min(1, prev * 2);
+      if (type === 'min') return 0.001;
+      return 1;
     });
   }, []);
 

@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Phase, BetSlotState, SimPlayer, RoundResult, BetRecord } from './types';
 import { genSeeds, calcCrashPoint, multiplierAt, genSimPlayers, simPlayerCashoutTarget } from './engine';
 
+import { MIN_SOL_BET, MAX_SOL_BET, SOL_STEP } from '@/lib/sol-bet';
+
 const BETTING_DURATION = 6000; // 6s betting phase
 const RESULT_DURATION = 3000; // 3s result pause
 const MAX_CAP = 1000; // max multiplier cap
@@ -35,8 +37,8 @@ export function useCrashGame(): GameLoop {
   const [crashPoint, setCrashPoint] = useState(1);
 
   const [betSlots, setBetSlots] = useState<[BetSlotState, BetSlotState]>([
-    { amount: 100, mode: 'manual', autoCashout: 2, placed: false, cashedOut: false, cashoutMultiplier: null, winAmount: null, autoNextRound: false },
-    { amount: 100, mode: 'manual', autoCashout: 2, placed: false, cashedOut: false, cashoutMultiplier: null, winAmount: null, autoNextRound: false },
+    { amount: 0.01, mode: 'manual', autoCashout: 2, placed: false, cashedOut: false, cashoutMultiplier: null, winAmount: null, autoNextRound: false },
+    { amount: 0.01, mode: 'manual', autoCashout: 2, placed: false, cashedOut: false, cashoutMultiplier: null, winAmount: null, autoNextRound: false },
   ]);
   const [betRecords, setBetRecords] = useState<BetRecord[]>([]);
 

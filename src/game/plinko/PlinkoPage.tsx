@@ -11,6 +11,7 @@ import {
 import type { Risk, Rows, Ball } from './types';
 import type { RoundResult } from './types';
 import { useWallet } from '@/lib/wallet';
+import { MIN_SOL_BET, MAX_SOL_BET } from '@/lib/sol-bet';
 
 export default function PlinkoPage({ onHome }: { onHome: () => void }) {
   const game = usePlinkoGame();
@@ -58,8 +59,11 @@ export default function PlinkoPage({ onHome }: { onHome: () => void }) {
                       onChange={(e) => wallet.requireWallet(() => game.setBetAmount(Math.max(0, Number(e.target.value))))}
                       className="flex-1 min-w-0 w-0 bg-transparent text-white text-[16px] font-bold tabular-nums outline-none"
                       placeholder="0"
+                      step="0.001"
+                      min={MIN_SOL_BET}
+                      max={MAX_SOL_BET}
                     />
-                    <span className="text-white/30 text-[12px] font-bold shrink-0 ml-1">₽</span>
+                    <span className="text-white/30 text-[12px] font-bold shrink-0 ml-1">SOL</span>
                   </div>
                   <div className="grid grid-cols-4 gap-1.5 w-full min-w-0">
                     {(['half', 'double', 'min', 'max'] as const).map((t) => (
@@ -207,8 +211,11 @@ export default function PlinkoPage({ onHome }: { onHome: () => void }) {
                     onChange={(e) => wallet.requireWallet(() => game.setBetAmount(Math.max(0, Number(e.target.value))))}
                     className="flex-1 min-w-0 w-0 bg-transparent text-white text-[15px] font-bold tabular-nums outline-none"
                     placeholder="0"
+                    step="0.001"
+                    min={MIN_SOL_BET}
+                    max={MAX_SOL_BET}
                   />
-                  <span className="text-white/30 text-[11px] font-bold shrink-0 ml-1">₽</span>
+                  <span className="text-white/30 text-[11px] font-bold shrink-0 ml-1">SOL</span>
                 </div>
                 <div className="grid grid-cols-4 gap-1.5">
                   {(['half', 'double', 'min', 'max'] as const).map((t) => (
@@ -356,8 +363,8 @@ export default function PlinkoPage({ onHome }: { onHome: () => void }) {
               <div className="flex flex-col gap-2 text-[11px]">
                 <div className="flex justify-between"><span className="text-white/40">RTP</span><span className="text-white font-bold">99%</span></div>
                 <div className="flex justify-between"><span className="text-white/40">Макс. выигрыш</span><span className="text-white font-bold">x1000</span></div>
-                <div className="flex justify-between"><span className="text-white/40">Мин. ставка</span><span className="text-white font-bold">{MIN_BET} ₽</span></div>
-                <div className="flex justify-between"><span className="text-white/40">Макс. ставка</span><span className="text-white font-bold">{MAX_BET.toLocaleString('ru-RU')} ₽</span></div>
+                <div className="flex justify-between"><span className="text-white/40">Мин. ставка</span><span className="text-white font-bold">0.001 SOL</span></div>
+                <div className="flex justify-between"><span className="text-white/40">Макс. ставка</span><span className="text-white font-bold">1 SOL</span></div>
                 <div className="flex justify-between"><span className="text-white/40">Ряды</span><span className="text-white font-bold">8–16</span></div>
                 <div className="flex justify-between"><span className="text-white/40">Макс. шариков</span><span className="text-white font-bold">{MAX_BALLS}</span></div>
               </div>
@@ -444,7 +451,7 @@ export default function PlinkoPage({ onHome }: { onHome: () => void }) {
               </div>
               <div>
                 <h3 className="text-white font-bold text-[13px] tracking-wide mb-1.5">RTP и лимиты</h3>
-                <p className="text-white/50 text-[12px] leading-relaxed">RTP: 99%. Мин. ставка: {MIN_BET} ₽. Макс. ставка: {MAX_BET.toLocaleString('ru-RU')} ₽. Макс. множитель: x1000 (16 рядов, высокий риск).</p>
+                <p className="text-white/50 text-[12px] leading-relaxed">RTP: 99%. Мин. ставка: 0.001 SOL. Макс. ставка: 1 SOL. Макс. множитель: x1000 (16 рядов, высокий риск).</p>
               </div>
             </div>
           </div>

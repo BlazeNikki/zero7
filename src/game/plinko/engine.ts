@@ -3,8 +3,8 @@ import type { Risk, Rows } from './types';
 export const ROWS_OPTIONS: Rows[] = [8, 10, 12, 14, 16];
 export const RTP = 0.99;
 export const MAX_BALLS = 20;
-export const MIN_BET = 10;
-export const MAX_BET = 100_000;
+export const MIN_BET = 0.001;
+export const MAX_BET = 1;
 
 const HEX = '0123456789abcdef';
 
@@ -112,7 +112,8 @@ export function formatMultiplier(m: number): string {
 }
 
 export function formatAmount(a: number): string {
-  return a.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' ₽';
+  if (a === 0) return '0 SOL';
+  return a >= 1 ? a.toFixed(3) + ' SOL' : a.toFixed(4) + ' SOL';
 }
 
 export function formatShortMult(m: number): string {

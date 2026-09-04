@@ -96,7 +96,8 @@ export function formatMultiplier(m: number): string {
 }
 
 export function formatAmount(a: number): string {
-  return a.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' ₽';
+  if (a === 0) return '0 SOL';
+  return a >= 1 ? a.toFixed(3) + ' SOL' : a.toFixed(4) + ' SOL';
 }
 
 export function createRoundResult(

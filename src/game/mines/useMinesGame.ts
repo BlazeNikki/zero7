@@ -12,7 +12,7 @@ import {
 export function useMinesGame() {
   const [phase, setPhase] = useState<Phase>('idle');
   const [grid, setGrid] = useState<Cell[]>(() => createGrid());
-  const [betAmount, setBetAmount] = useState(100);
+  const [betAmount, setBetAmount] = useState(0.01);
   const [minesCount, setMinesCount] = useState(3);
   const [revealedCount, setRevealedCount] = useState(0);
   const [multiplier, setMultiplier] = useState(1);
@@ -190,10 +190,10 @@ export function useMinesGame() {
 
   const quickAmount = useCallback((type: 'half' | 'double' | 'min' | 'max') => {
     setBetAmount((prev) => {
-      if (type === 'half') return Math.max(10, Math.floor(prev / 2));
-      if (type === 'double') return Math.min(100000, prev * 2);
-      if (type === 'min') return 10;
-      return 100000;
+      if (type === 'half') return Math.max(0.001, Math.floor(prev / 2 * 1000) / 1000);
+      if (type === 'double') return Math.min(1, prev * 2);
+      if (type === 'min') return 0.001;
+      return 1;
     });
   }, []);
 

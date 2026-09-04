@@ -1,0 +1,11 @@
+[functions.auth-wallet]
+verify_jwt = false
+
+[functions.solana-rpc]
+verify_jwt = false
+
+[functions.directus-proxy]
+verify_jwt = false
+
+[functions.bet-process]
+verify_jwt = true

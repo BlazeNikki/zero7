@@ -1,5 +1,6 @@
 import type { BetSlotState, Phase } from './types';
 import { formatMultiplier, formatAmount } from './engine';
+import { MIN_SOL_BET, MAX_SOL_BET, SOL_PRESETS } from '@/lib/sol-bet';
 
 export default function BetSlot({
   slot,
@@ -24,10 +25,10 @@ export default function BetSlot({
 
   const quickAmount = (type: 'half' | 'double' | 'min' | 'max') => {
     const v = state.amount;
-    if (type === 'half') onUpdate({ amount: Math.max(10, Math.floor(v / 2)) });
-    else if (type === 'double') onUpdate({ amount: Math.min(100000, v * 2) });
-    else if (type === 'min') onUpdate({ amount: 10 });
-    else onUpdate({ amount: 100000 });
+    if (type === 'half') onUpdate({ amount: Math.max(MIN_SOL_BET, Math.floor(v / 2 * 1000) / 1000) });
+    else if (type === 'double') onUpdate({ amount: Math.min(MAX_SOL_BET, v * 2) });
+    else if (type === 'min') onUpdate({ amount: MIN_SOL_BET });
+    else onUpdate({ amount: MAX_SOL_BET });
   };
 
   return (
@@ -65,8 +66,11 @@ export default function BetSlot({
             disabled={state.placed}
             className="flex-1 min-w-0 w-0 bg-transparent text-white text-[16px] font-bold tabular-nums outline-none disabled:opacity-50"
             placeholder="0"
+            step="0.001"
+            min={MIN_SOL_BET}
+            max={MAX_SOL_BET}
           />
-          <span className="text-white/30 text-[12px] font-bold shrink-0 ml-1">₽</span>
+          <span className="text-white/30 text-[12px] font-bold shrink-0 ml-1">SOL</span>
         </div>
         <div className="grid grid-cols-4 gap-1.5 w-full min-w-0">
           {(['half', 'double', 'min', 'max'] as const).map((t) => (

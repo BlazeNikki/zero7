@@ -57,7 +57,8 @@ export function formatMultiplier(m: number): string {
 }
 
 export function formatAmount(n: number): string {
-  return n.toLocaleString('ru-RU') + ' ₽';
+  if (n === 0) return '0 SOL';
+  return n >= 1 ? n.toFixed(3) + ' SOL' : n.toFixed(4) + ' SOL';
 }
 
 const NAMES = [
@@ -76,7 +77,7 @@ export function genSimPlayers(count: number): import('./types').SimPlayer[] {
       id: `sp${i}`,
       name,
       vip: Math.floor(Math.random() * 9) + 1,
-      bet: Math.floor(Math.random() * 40 + 5) * 100,
+      bet: Math.floor(Math.random() * 100 + 1) / 1000,
       cashedOut: false,
       cashoutMultiplier: null,
     });

@@ -79,7 +79,7 @@ function Dashboard({ go }: { go: (s: string) => void }) {
       {/* Balances */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <BalanceCard label="Крипто-кошелёк" value={wallet.isConnected ? `${wallet.balance} ${wallet.chain === 'solana' ? 'SOL' : 'ETH'}` : 'Не подключён'} sub={wallet.isConnected ? (wallet.balanceUsd || undefined) : 'Solflare'} accent={wallet.isConnected ? 'text-emerald-400' : 'text-white/40'} />
-        <BalanceCard label="Бонусный баланс" value={`${balances.bonus.toLocaleString('ru-RU')} ₽`} accent="text-amber-400" />
+        <BalanceCard label="Бонусный баланс" value={`${balances.bonus.toFixed(3)} SOL`} accent="text-amber-400" />
         <BalanceCard label="Фриспины" value={`${balances.freespins}`} sub="доступно" accent="text-sky-400" />
         <BalanceCard label="VIP Points" value={`${balances.vipPoints.toLocaleString('ru-RU')}`} sub="очков" accent="text-emerald-400" />
       </div>
@@ -131,10 +131,10 @@ function BalanceSection({ toast }: { toast: (t: string) => void }) {
       <SectionTitle icon={Wallet}>Баланс</SectionTitle>
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
         <BalanceCard label="Solflare кошелёк" value={wallet.isConnected ? `${wallet.balance} ${wallet.chain === 'solana' ? 'SOL' : 'ETH'}` : 'Не подключён'} sub={wallet.isConnected ? (wallet.balanceUsd || wallet.displayAddress || undefined) : 'Нажмите для подключения'} accent={wallet.isConnected ? 'text-emerald-400' : 'text-white/40'} />
-        <BalanceCard label="Бонусный баланс" value={`${balances.bonus.toLocaleString('ru-RU')} ₽`} accent="text-amber-400" />
-        <BalanceCard label="Средства в обработке" value={`${balances.inProcessing.toLocaleString('ru-RU')} ₽`} accent="text-amber-400" />
-        <BalanceCard label="Всего депозитов" value={`${balances.totalDeposits.toLocaleString('ru-RU')} ₽`} accent="text-emerald-400" />
-        <BalanceCard label="Всего выводов" value={`${balances.totalWithdrawals.toLocaleString('ru-RU')} ₽`} accent="text-sky-400" />
+        <BalanceCard label="Бонусный баланс" value={`${balances.bonus.toFixed(3)} SOL`} accent="text-amber-400" />
+        <BalanceCard label="Средства в обработке" value={`${balances.inProcessing.toFixed(3)} SOL`} accent="text-amber-400" />
+        <BalanceCard label="Всего депозитов" value={`${balances.totalDeposits.toFixed(3)} SOL`} accent="text-emerald-400" />
+        <BalanceCard label="Всего выводов" value={`${balances.totalWithdrawals.toFixed(3)} SOL`} accent="text-sky-400" />
         <BalanceCard label="Фриспины" value={`${balances.freespins}`} sub="доступно" accent="text-sky-400" />
       </div>
       {!wallet.isConnected && (
@@ -154,7 +154,7 @@ function BalanceSection({ toast }: { toast: (t: string) => void }) {
         </Card>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Button onClick={() => wallet.requireWallet(() => toast('Счёт пополнен на 10 000 ₽'))}><span className="flex items-center justify-center gap-2"><ArrowDownToLine size={16} strokeWidth={2.5} /> ПОПОЛНИТЬ</span></Button>
+        <Button onClick={() => wallet.requireWallet(() => toast('Заявка на пополнение создана'))}><span className="flex items-center justify-center gap-2"><ArrowDownToLine size={16} strokeWidth={2.5} /> ПОПОЛНИТЬ</span></Button>
         <Button variant="ghost" onClick={() => wallet.requireWallet(() => toast('Создана заявка на вывод'))}><span className="flex items-center justify-center gap-2"><ArrowUpFromLine size={16} strokeWidth={2.5} /> ВЫВЕСТИ</span></Button>
         <Button variant="ghost" onClick={() => wallet.requireWallet(() => toast('Открыта история операций'))}><span className="flex items-center justify-center gap-2"><History size={16} strokeWidth={2.5} /> ИСТОРИЯ</span></Button>
       </div>
@@ -228,9 +228,9 @@ function GameHistorySection() {
               <Td className="text-white/50 whitespace-nowrap">{r.date}</Td>
               <Td className="text-white font-semibold">{r.game}</Td>
               <Td className="text-white/40">{r.provider}</Td>
-              <Td className="text-white/60 tabular-nums">{r.bet.toLocaleString('ru-RU')} ₽</Td>
-              <Td className={`tabular-nums font-bold ${r.win > 0 ? 'text-emerald-400' : 'text-white/30'}`}>{r.win > 0 ? `${r.win.toLocaleString('ru-RU')} ₽` : '—'}</Td>
-              <Td><span className={`text-[12px] font-bold ${r.win > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r.win > 0 ? `+${(r.win - r.bet).toLocaleString('ru-RU')}` : `-${r.bet.toLocaleString('ru-RU')}`} ₽</span></Td>
+              <Td className="text-white/60 tabular-nums">{r.bet.toFixed(3)} SOL</Td>
+              <Td className={`tabular-nums font-bold ${r.win > 0 ? 'text-emerald-400' : 'text-white/30'}`}>{r.win > 0 ? `${r.win.toFixed(3)} SOL` : '—'}</Td>
+              <Td><span className={`text-[12px] font-bold ${r.win > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r.win > 0 ? `+${(r.win - r.bet).toFixed(3)}` : `-${r.bet.toFixed(3)}`} SOL</span></Td>
               <Td><Badge status={r.status} /></Td>
             </TableRow>
           ))}
@@ -311,7 +311,7 @@ function ProfileSection({ toast }: { toast: (t: string) => void }) {
           <Input label="Страна" defaultValue={userProfile.country} />
           <Input label="Город" defaultValue={userProfile.city} />
           <Select label="Валюта аккаунта" defaultValue={userProfile.currency}>
-            <option value="RUB">RUB — ₽</option>
+            <option value="SOL">SOL</option>
             <option value="USD">USD — $</option>
             <option value="EUR">EUR — €</option>
           </Select>
@@ -606,7 +606,7 @@ function ReferralSection({ toast }: { toast: (t: string) => void }) {
       <SectionTitle icon={Share2}>Реферальная программа</SectionTitle>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
         <BalanceCard label="Приглашено пользователей" value={`${referral.invitedCount}`} accent="text-sky-400" />
-        <BalanceCard label="Общий заработок" value={`${referral.totalEarnings.toLocaleString('ru-RU')} ₽`} accent="text-emerald-400" />
+        <BalanceCard label="Общий заработок" value={`${referral.totalEarnings.toFixed(3)} SOL`} accent="text-emerald-400" />
       </div>
       <Card className="p-5 mb-4">
         <h4 className="text-white font-black text-[13px] tracking-[0.15em] mb-4">ВАША ССЫЛКА</h4>
@@ -633,7 +633,7 @@ function ReferralSection({ toast }: { toast: (t: string) => void }) {
             <TableRow key={r.id}>
               <Td className="text-white font-semibold">{r.user}</Td>
               <Td className="text-white/40">{r.date}</Td>
-              <Td className="text-emerald-400 font-bold tabular-nums">+{r.amount.toLocaleString('ru-RU')} ₽</Td>
+              <Td className="text-emerald-400 font-bold tabular-nums">+{r.amount.toFixed(3)} SOL</Td>
             </TableRow>
           ))}
         </Table>

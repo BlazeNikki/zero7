@@ -127,6 +127,8 @@ type SolflareProvider = {
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   signMessage: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
+  signAndSendTransaction?: (tx: unknown) => Promise<{ signature: string }>;
+  signTransaction?: (tx: unknown) => Promise<unknown>;
   on?: (event: string, handler: (...args: unknown[]) => void) => void;
   removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
 };

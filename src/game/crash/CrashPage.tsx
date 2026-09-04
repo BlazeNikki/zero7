@@ -333,11 +333,11 @@ export default function CrashPage({ onHome }: { onHome: () => void }) {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-white/40">Мин. ставка</span>
-                  <span className="text-white font-bold">10 ₽</span>
+                  <span className="text-white font-bold">0.001 SOL</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-white/40">Макс. ставка</span>
-                  <span className="text-white font-bold">100 000 ₽</span>
+                  <span className="text-white font-bold">1 SOL</span>
                 </div>
               </div>
             </div>
@@ -419,7 +419,7 @@ export default function CrashPage({ onHome }: { onHome: () => void }) {
               </div>
               <div>
                 <h3 className="text-white font-bold text-[13px] tracking-wide mb-1.5">RTP и лимиты</h3>
-                <p className="text-white/50 text-[12px] leading-relaxed">RTP: 97%. Мин. ставка: 10 ₽. Макс. ставка: 100 000 ₽. Макс. множитель: x1000.</p>
+                <p className="text-white/50 text-[12px] leading-relaxed">RTP: 97%. Мин. ставка: 0.001 SOL. Макс. ставка: 1 SOL. Макс. множитель: x1000.</p>
               </div>
             </div>
           </div>

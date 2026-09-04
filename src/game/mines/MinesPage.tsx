@@ -14,6 +14,7 @@ import {
 } from './engine';
 import type { RoundResult } from './types';
 import { useWallet } from '@/lib/wallet';
+import { MIN_SOL_BET, MAX_SOL_BET } from '@/lib/sol-bet';
 
 export default function MinesPage({ onHome }: { onHome: () => void }) {
   const game = useMinesGame();
@@ -64,8 +65,11 @@ export default function MinesPage({ onHome }: { onHome: () => void }) {
                       disabled={isPlaying || isFinished}
                       className="flex-1 min-w-0 w-0 bg-transparent text-white text-[16px] font-bold tabular-nums outline-none disabled:opacity-50"
                       placeholder="0"
+                      step="0.001"
+                      min={MIN_SOL_BET}
+                      max={MAX_SOL_BET}
                     />
-                    <span className="text-white/30 text-[12px] font-bold shrink-0 ml-1">₽</span>
+                    <span className="text-white/30 text-[12px] font-bold shrink-0 ml-1">SOL</span>
                   </div>
                   <div className="grid grid-cols-4 gap-1.5 w-full min-w-0">
                     {(['half', 'double', 'min', 'max'] as const).map((t) => (
@@ -270,8 +274,8 @@ export default function MinesPage({ onHome }: { onHome: () => void }) {
               <div className="flex flex-col gap-2 text-[11px]">
                 <div className="flex justify-between"><span className="text-white/40">RTP</span><span className="text-white font-bold">97%</span></div>
                 <div className="flex justify-between"><span className="text-white/40">Макс. выигрыш</span><span className="text-white font-bold">x24000</span></div>
-                <div className="flex justify-between"><span className="text-white/40">Мин. ставка</span><span className="text-white font-bold">10 ₽</span></div>
-                <div className="flex justify-between"><span className="text-white/40">Макс. ставка</span><span className="text-white font-bold">100 000 ₽</span></div>
+                <div className="flex justify-between"><span className="text-white/40">Мин. ставка</span><span className="text-white font-bold">0.001 SOL</span></div>
+                <div className="flex justify-between"><span className="text-white/40">Макс. ставка</span><span className="text-white font-bold">1 SOL</span></div>
                 <div className="flex justify-between"><span className="text-white/40">Поле</span><span className="text-white font-bold">5×5 (25)</span></div>
                 <div className="flex justify-between"><span className="text-white/40">Мины</span><span className="text-white font-bold">1–24</span></div>
               </div>
@@ -378,7 +382,7 @@ export default function MinesPage({ onHome }: { onHome: () => void }) {
               </div>
               <div>
                 <h3 className="text-white font-bold text-[13px] tracking-wide mb-1.5">RTP и лимиты</h3>
-                <p className="text-white/50 text-[12px] leading-relaxed">RTP: 97%. Мин. ставка: 10 ₽. Макс. ставка: 100 000 ₽. Макс. множитель: x24000.</p>
+                <p className="text-white/50 text-[12px] leading-relaxed">RTP: 97%. Мин. ставка: 0.001 SOL. Макс. ставка: 1 SOL. Макс. множитель: x24000.</p>
               </div>
             </div>
           </div>
