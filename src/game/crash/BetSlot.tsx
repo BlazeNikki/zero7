@@ -7,6 +7,7 @@ export default function BetSlot({
   state,
   phase,
   multiplier,
+  betState,
   onPlace,
   onCashOut,
   onUpdate,
@@ -15,6 +16,7 @@ export default function BetSlot({
   state: BetSlotState;
   phase: Phase;
   multiplier: number;
+  betState?: 'idle' | 'sending' | 'active' | 'error';
   onPlace: () => void;
   onCashOut: () => void;
   onUpdate: (patch: Partial<BetSlotState>) => void;
@@ -140,10 +142,10 @@ export default function BetSlot({
       ) : (
         <button
           onClick={onPlace}
-          disabled={!canPlace}
+          disabled={!canPlace || betState === 'sending'}
           className="w-full bg-white text-black font-black text-[13px] tracking-[0.2em] rounded-lg py-3.5 hover:bg-white/90 active:bg-white/80 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          СДЕЛАТЬ СТАВКУ
+          {betState === 'sending' ? 'ОБРАБОТКА...' : 'СДЕЛАТЬ СТАВКУ'}
         </button>
       )}
     </div>

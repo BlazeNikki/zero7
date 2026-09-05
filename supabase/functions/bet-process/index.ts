@@ -509,7 +509,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
-    // Action: settle-bet
+    // Action: settle-bet (credits internal balance, no on-chain payout)
     // ============================================================
     if (action === "settle-bet") {
       const { betId, result, payoutAmountSol, multiplier } = body;
@@ -545,86 +545,69 @@ Deno.serve(async (req: Request) => {
       }
 
       if (result === "win" && payoutAmountSol > 0) {
-        // Mark as settled first (idempotency: prevent double-payout)
-        await supabase
+        // Mark as settled (idempotency: prevent double-credit)
+        const { data: updated, error: updateErr } = await supabase
           .from("game_history")
           .update({
             result: "win",
             payout_amount: payoutAmountSol,
             multiplier: multiplier ?? null,
-            bet_status: "settled",
+            bet_status: "completed",
             bet_status_updated_at: new Date().toISOString(),
             settled_at: new Date().toISOString(),
+            payout_status: "confirmed",
           })
           .eq("id", betId)
-          .eq("bet_status", "active"); // Only update if still active
+          .eq("bet_status", "active")
+          .select("id");
 
-        // Send payout from treasury
-        const payoutLamports = Math.round(payoutAmountSol * LAMPORTS_PER_SOL);
-        try {
-          const payoutSignature = await sendPayoutFromTreasury(bet.wallet_address, payoutLamports, network);
-
-          // Mark as completed with payout tx signature
-          await supabase
-            .from("game_history")
-            .update({
-              bet_status: "completed",
-              bet_status_updated_at: new Date().toISOString(),
-              payout_status: "confirmed",
-              payout_tx_signature: payoutSignature,
-            })
-            .eq("id", betId);
-
-          log("INFO", "Bet settled and payout sent", {
-            betId,
-            walletAddress: bet.wallet_address,
-            payoutAmountSol,
-            payoutSignature,
-            network,
-            explorerUrl: explorerUrl(payoutSignature, network),
-          });
-
-          return new Response(JSON.stringify({
-            betId,
-            status: "completed",
-            payout: payoutAmountSol,
-            payoutTxSignature: payoutSignature,
-            message: "Bet settled. Payout sent to your wallet.",
-            explorerUrl: explorerUrl(payoutSignature, network),
-          }), {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        } catch (payoutErr) {
-          // Payout failed — keep bet as "settled" (not completed) so it can be retried
-          log("ERROR", "Payout failed", {
-            betId,
-            walletAddress: bet.wallet_address,
-            payoutAmountSol,
-            network,
-            error: (payoutErr as Error).message,
-          });
-
-          await supabase
-            .from("game_history")
-            .update({
-              payout_status: "pending",
-              error_message: `Payout failed: ${(payoutErr as Error).message}`,
-              bet_status_updated_at: new Date().toISOString(),
-            })
-            .eq("id", betId);
-
-          return new Response(JSON.stringify({
-            betId,
-            status: "settled",
-            payout: payoutAmountSol,
-            message: "You won! The payout is being processed. If it doesn't arrive shortly, please contact support.",
-            error: "Payout pending",
-          }), {
-            status: 200,
+        if (updateErr || !updated || updated.length === 0) {
+          log("WARN", "Settle race — bet not active", { betId, error: updateErr?.message });
+          return new Response(JSON.stringify({ error: "Bet already settled" }), {
+            status: 409,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
+
+        // Credit internal balance atomically
+        const { data: balRow } = await supabase
+          .from("internal_balances")
+          .select("balance_sol, total_winnings")
+          .eq("wallet_address", bet.wallet_address)
+          .eq("network", network)
+          .single();
+
+        const newBalance = (balRow?.balance_sol ?? 0) + payoutAmountSol;
+        const newWinnings = (balRow?.total_winnings ?? 0) + payoutAmountSol;
+
+        await supabase
+          .from("internal_balances")
+          .upsert({
+            wallet_address: bet.wallet_address,
+            network,
+            balance_sol: newBalance,
+            total_winnings: newWinnings,
+            updated_at: new Date().toISOString(),
+          });
+
+        log("INFO", "Bet settled — internal balance credited", {
+          betId,
+          walletAddress: bet.wallet_address,
+          payoutAmountSol,
+          newBalance,
+          network,
+        });
+
+        return new Response(JSON.stringify({
+          betId,
+          status: "completed",
+          payout: payoutAmountSol,
+          internalBalance: newBalance,
+          message: "You won! Winnings credited to your internal balance.",
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       } else {
         // Loss
         await supabase
@@ -640,6 +623,24 @@ Deno.serve(async (req: Request) => {
           })
           .eq("id", betId);
 
+        // Track losses in internal_balances
+        const { data: balRow } = await supabase
+          .from("internal_balances")
+          .select("total_losses")
+          .eq("wallet_address", bet.wallet_address)
+          .eq("network", network)
+          .single();
+
+        const newLosses = (balRow?.total_losses ?? 0) + bet.bet_amount;
+        await supabase
+          .from("internal_balances")
+          .upsert({
+            wallet_address: bet.wallet_address,
+            network,
+            total_losses: newLosses,
+            updated_at: new Date().toISOString(),
+          });
+
         log("INFO", "Bet settled as loss", { betId, walletAddress: bet.wallet_address, network });
 
         return new Response(JSON.stringify({
@@ -651,6 +652,385 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+    }
+
+    // ============================================================
+    // Action: deposit (verify on-chain tx, credit internal balance)
+    // ============================================================
+    if (action === "deposit") {
+      const { walletAddress, amountSol, txSignature } = body;
+
+      if (!walletAddress || !amountSol || !txSignature) {
+        return new Response(JSON.stringify({ error: "Missing required fields" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      log("INFO", "Deposit request", { walletAddress, amountSol, txSignature, network });
+
+      const depositLamports = Math.round(amountSol * LAMPORTS_PER_SOL);
+
+      // Replay protection
+      const { data: existing } = await supabase
+        .from("deposits")
+        .select("id, status")
+        .eq("tx_signature", txSignature)
+        .eq("network", network)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        return new Response(JSON.stringify({ error: "This deposit has already been processed." }), {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Verify on-chain
+      const txDetails = await confirmTransactionWithRetry(txSignature, config.rpc, network);
+      if (!txDetails) {
+        // Create pending record
+        await supabase.from("deposits").insert({
+          wallet_address: walletAddress,
+          network,
+          amount_sol: amountSol,
+          tx_signature: txSignature,
+          status: "pending",
+        });
+        return new Response(JSON.stringify({
+          status: "pending",
+          message: "Transaction is confirming. Your deposit will be credited shortly.",
+        }), {
+          status: 202,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (txDetails.meta?.err) {
+        await supabase.from("deposits").insert({
+          wallet_address: walletAddress,
+          network,
+          amount_sol: amountSol,
+          tx_signature: txSignature,
+          status: "failed",
+        });
+        return new Response(JSON.stringify({ error: "Transaction failed on-chain" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Verify amount
+      const senderPubkeyIndex = 0;
+      const preBalance = txDetails.preBalances[senderPubkeyIndex];
+      const postBalance = txDetails.postBalances[senderPubkeyIndex];
+      const actualDiff = preBalance - postBalance - txDetails.fee;
+
+      if (actualDiff < depositLamports * 0.99) {
+        await supabase.from("deposits").insert({
+          wallet_address: walletAddress,
+          network,
+          amount_sol: amountSol,
+          tx_signature: txSignature,
+          status: "failed",
+        });
+        return new Response(JSON.stringify({ error: "Deposit amount mismatch" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Credit internal balance
+      const { data: balRow } = await supabase
+        .from("internal_balances")
+        .select("balance_sol, total_deposited")
+        .eq("wallet_address", walletAddress)
+        .eq("network", network)
+        .single();
+
+      const newBalance = (balRow?.balance_sol ?? 0) + amountSol;
+      const newDeposited = (balRow?.total_deposited ?? 0) + amountSol;
+
+      await supabase
+        .from("internal_balances")
+        .upsert({
+          wallet_address: walletAddress,
+          network,
+          balance_sol: newBalance,
+          total_deposited: newDeposited,
+          updated_at: new Date().toISOString(),
+        });
+
+      await supabase.from("deposits").insert({
+        wallet_address: walletAddress,
+        network,
+        amount_sol: amountSol,
+        tx_signature: txSignature,
+        status: "confirmed",
+        processed_at: new Date().toISOString(),
+      });
+
+      log("INFO", "Deposit confirmed", { walletAddress, amountSol, txSignature, network, newBalance });
+
+      return new Response(JSON.stringify({
+        status: "confirmed",
+        internalBalance: newBalance,
+        message: "Deposit confirmed. Internal balance updated.",
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ============================================================
+    // Action: request-withdrawal (create pending request, debit balance)
+    // ============================================================
+    if (action === "request-withdrawal") {
+      const { walletAddress, amountSol } = body;
+
+      if (!walletAddress || !amountSol) {
+        return new Response(JSON.stringify({ error: "Missing required fields" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (amountSol < MIN_BET_SOL) {
+        return new Response(JSON.stringify({ error: `Minimum withdrawal is ${MIN_BET_SOL} SOL` }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Check internal balance
+      const { data: balRow } = await supabase
+        .from("internal_balances")
+        .select("balance_sol")
+        .eq("wallet_address", walletAddress)
+        .eq("network", network)
+        .single();
+
+      const currentBalance = balRow?.balance_sol ?? 0;
+      if (currentBalance < amountSol) {
+        return new Response(JSON.stringify({ error: `Insufficient internal balance. Available: ${currentBalance} SOL` }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Debit internal balance immediately (hold funds)
+      const newBalance = currentBalance - amountSol;
+      await supabase
+        .from("internal_balances")
+        .upsert({
+          wallet_address: walletAddress,
+          network,
+          balance_sol: newBalance,
+          updated_at: new Date().toISOString(),
+        });
+
+      // Create withdrawal request
+      const { data: withdrawal, error: wErr } = await supabase
+        .from("withdrawal_requests")
+        .insert({
+          wallet_address: walletAddress,
+          network,
+          amount_sol: amountSol,
+          status: "pending",
+        })
+        .select("id")
+        .single();
+
+      if (wErr) {
+        // Refund the debit if insert failed
+        await supabase
+          .from("internal_balances")
+          .upsert({
+            wallet_address: walletAddress,
+            network,
+            balance_sol: currentBalance,
+            updated_at: new Date().toISOString(),
+          });
+        return new Response(JSON.stringify({ error: "Failed to create withdrawal request" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      log("INFO", "Withdrawal requested", { withdrawalId: withdrawal?.id, walletAddress, amountSol, network });
+
+      // Attempt to process immediately
+      try {
+        const withdrawLamports = Math.round(amountSol * LAMPORTS_PER_SOL);
+        const payoutSignature = await sendPayoutFromTreasury(walletAddress, withdrawLamports, network);
+
+        await supabase
+          .from("withdrawal_requests")
+          .update({
+            status: "processed",
+            tx_signature: payoutSignature,
+            processed_at: new Date().toISOString(),
+          })
+          .eq("id", withdrawal!.id);
+
+        const newWithdrawn = (balRow?.total_withdrawn ?? 0) + amountSol;
+        await supabase
+          .from("internal_balances")
+          .upsert({
+            wallet_address: walletAddress,
+            network,
+            total_withdrawn: newWithdrawn,
+            updated_at: new Date().toISOString(),
+          });
+
+        log("INFO", "Withdrawal processed", { withdrawalId: withdrawal?.id, walletAddress, amountSol, payoutSignature, network });
+
+        return new Response(JSON.stringify({
+          withdrawalId: withdrawal?.id,
+          status: "processed",
+          txSignature: payoutSignature,
+          internalBalance: newBalance,
+          explorerUrl: explorerUrl(payoutSignature, network),
+          message: "Withdrawal processed. SOL sent to your wallet.",
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (payoutErr) {
+        // Payout failed — refund internal balance, mark as failed
+        await supabase
+          .from("withdrawal_requests")
+          .update({
+            status: "failed",
+            error_message: (payoutErr as Error).message,
+            processed_at: new Date().toISOString(),
+          })
+          .eq("id", withdrawal!.id);
+
+        // Refund
+        await supabase
+          .from("internal_balances")
+          .upsert({
+            wallet_address: walletAddress,
+            network,
+            balance_sol: currentBalance,
+            updated_at: new Date().toISOString(),
+          });
+
+        log("ERROR", "Withdrawal payout failed", { withdrawalId: withdrawal?.id, error: (payoutErr as Error).message });
+
+        return new Response(JSON.stringify({
+          withdrawalId: withdrawal?.id,
+          status: "failed",
+          internalBalance: currentBalance,
+          message: `Withdrawal failed: ${(payoutErr as Error).message}. Internal balance refunded.`,
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ============================================================
+    // Action: get-internal-balance
+    // ============================================================
+    if (action === "get-internal-balance") {
+      const { walletAddress } = body;
+
+      if (!walletAddress) {
+        return new Response(JSON.stringify({ error: "Missing walletAddress" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: balRow } = await supabase
+        .from("internal_balances")
+        .select("*")
+        .eq("wallet_address", walletAddress)
+        .eq("network", network)
+        .single();
+
+      return new Response(JSON.stringify({
+        walletAddress,
+        network,
+        balanceSol: balRow?.balance_sol ?? 0,
+        totalDeposited: balRow?.total_deposited ?? 0,
+        totalWithdrawn: balRow?.total_withdrawn ?? 0,
+        totalWinnings: balRow?.total_winnings ?? 0,
+        totalLosses: balRow?.total_losses ?? 0,
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ============================================================
+    // Action: get-withdrawals
+    // ============================================================
+    if (action === "get-withdrawals") {
+      const { walletAddress, limit = 20, offset = 0 } = body;
+
+      if (!walletAddress) {
+        return new Response(JSON.stringify({ error: "Missing walletAddress" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: withdrawals, error } = await supabase
+        .from("withdrawal_requests")
+        .select("*")
+        .eq("wallet_address", walletAddress)
+        .eq("network", network)
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        return new Response(JSON.stringify({ error: "Failed to retrieve withdrawals" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ withdrawals }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ============================================================
+    // Action: get-deposits
+    // ============================================================
+    if (action === "get-deposits") {
+      const { walletAddress, limit = 20, offset = 0 } = body;
+
+      if (!walletAddress) {
+        return new Response(JSON.stringify({ error: "Missing walletAddress" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: deposits, error } = await supabase
+        .from("deposits")
+        .select("*")
+        .eq("wallet_address", walletAddress)
+        .eq("network", network)
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        return new Response(JSON.stringify({ error: "Failed to retrieve deposits" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ deposits }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // ============================================================
@@ -741,10 +1121,11 @@ Deno.serve(async (req: Request) => {
     // Action: get-config
     // ============================================================
     if (action === "get-config") {
-      // Return network config so the frontend knows which RPC and treasury to use
+      const treasuryConfigured = !!Deno.env.get(config.treasuryKeypairEnv);
       return new Response(JSON.stringify({
         network,
         treasuryWallet: config.treasuryWallet,
+        treasuryConfigured,
         rpcUrl: config.rpc,
         minBet: MIN_BET_SOL,
         maxBet: MAX_BET_SOL,

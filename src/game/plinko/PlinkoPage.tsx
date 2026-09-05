@@ -168,14 +168,14 @@ export default function PlinkoPage({ onHome }: { onHome: () => void }) {
               {/* Action button */}
               <button
                 onClick={() => wallet.requireWallet(() => game.dropBall())}
-                disabled={inFlight >= MAX_BALLS || !game.seedsReady}
+                disabled={inFlight >= MAX_BALLS || !game.seedsReady || game.isPlacingBet}
                 className={`w-full font-black text-[13px] tracking-[0.15em] rounded-lg py-3.5 transition-colors ${
-                  inFlight >= MAX_BALLS || !game.seedsReady
+                  inFlight >= MAX_BALLS || !game.seedsReady || game.isPlacingBet
                     ? 'bg-white/10 text-white/30 cursor-not-allowed'
                     : 'bg-white text-black hover:bg-white/90 active:bg-white/80'
                 }`}
               >
-                {inFlight >= MAX_BALLS ? 'МАКС. ШАРИКОВ' : !game.seedsReady ? 'ЗАГРУЗКА...' : 'ЗАПУСТИТЬ ШАРИК'}
+                {game.isPlacingBet ? 'ОБРАБОТКА...' : inFlight >= MAX_BALLS ? 'МАКС. ШАРИКОВ' : !game.seedsReady ? 'ЗАГРУЗКА...' : 'ЗАПУСТИТЬ ШАРИК'}
               </button>
 
               {/* In-flight counter */}
@@ -406,14 +406,14 @@ export default function PlinkoPage({ onHome }: { onHome: () => void }) {
         <div className="lg:hidden sticky bottom-0 z-30 bg-black/95 backdrop-blur-md border border-white/15 rounded-xl p-3 -mx-1">
           <button
             onClick={() => wallet.requireWallet(() => game.dropBall())}
-            disabled={inFlight >= MAX_BALLS || !game.seedsReady}
+            disabled={inFlight >= MAX_BALLS || !game.seedsReady || game.isPlacingBet}
             className={`w-full font-black text-[14px] tracking-[0.15em] rounded-lg py-3.5 transition-colors ${
-              inFlight >= MAX_BALLS || !game.seedsReady
+              inFlight >= MAX_BALLS || !game.seedsReady || game.isPlacingBet
                 ? 'bg-white/10 text-white/30 cursor-not-allowed'
                 : 'bg-white text-black hover:bg-white/90 active:bg-white/80'
             }`}
           >
-            {inFlight >= MAX_BALLS ? 'МАКС. ШАРИКОВ' : !game.seedsReady ? 'ЗАГРУЗКА...' : 'ЗАПУСТИТЬ ШАРИК'}
+            {game.isPlacingBet ? 'ОБРАБОТКА...' : inFlight >= MAX_BALLS ? 'МАКС. ШАРИКОВ' : !game.seedsReady ? 'ЗАГРУЗКА...' : 'ЗАПУСТИТЬ ШАРИК'}
           </button>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { getOrCreateDirectusUser, type DirectusUser } from './directus';
 import { setAuthToken, getAuthToken, clearAuthToken } from './auth';
 import { useNetwork } from './network-context';
+import { getInternalBalance } from './solana-bet';
 
 type WalletProviderType = 'solflare' | 'phantom';
 
@@ -14,12 +15,14 @@ type WalletState = {
   displayAddress: string | null;
   balance: string;
   balanceUsd: string;
+  internalBalance: number;
   chain: 'solana' | 'ethereum';
   directusUser: DirectusUser | null;
   connect: () => Promise<void>;
   connectWith: (provider: WalletProviderType) => Promise<void>;
   disconnect: () => Promise<void>;
   refreshBalance: () => Promise<void>;
+  refreshInternalBalance: () => Promise<void>;
   requireWallet: (action?: () => void) => boolean;
 };
 
@@ -32,12 +35,14 @@ const WalletContext = createContext<WalletState>({
   displayAddress: null,
   balance: '0.00',
   balanceUsd: '',
+  internalBalance: 0,
   chain: 'solana',
   directusUser: null,
   connect: async () => {},
   connectWith: async () => {},
   disconnect: async () => {},
   refreshBalance: async () => {},
+  refreshInternalBalance: async () => {},
   requireWallet: () => false,
 });
 
@@ -151,6 +156,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [chain, setChain] = useState<'solana' | 'ethereum'>('solana');
   const [balance, setBalance] = useState('0.00');
   const [balanceUsd, setBalanceUsd] = useState('');
+  const [internalBalance, setInternalBalance] = useState(0);
   const [directusUser, setDirectusUser] = useState<DirectusUser | null>(null);
   const [gateOpen, setGateOpen] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
@@ -259,6 +265,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const refreshBalance = useCallback(async () => {
     if (address) await fetchBalance(address);
   }, [address, fetchBalance]);
+
+  const refreshInternalBalance = useCallback(async () => {
+    if (!address) return;
+    try {
+      const bal = await getInternalBalance(address, network);
+      setInternalBalance(bal.balanceSol);
+    } catch {
+      // silent
+    }
+  }, [address, network]);
 
   const connectWith = useCallback(async (provider: WalletProviderType) => {
     const wallet = provider === 'solflare' ? getSolflareProvider() : window.phantom?.solana;
@@ -458,8 +474,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isConnected && address) {
       fetchBalance(address);
+      refreshInternalBalance();
     }
-  }, [network, isConnected, address, fetchBalance]);
+  }, [network, isConnected, address, fetchBalance, refreshInternalBalance]);
 
   // Wallet modal trigger listener
   useEffect(() => {
@@ -486,12 +503,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     displayAddress: address ? shortenAddress(address) : null,
     balance,
     balanceUsd,
+    internalBalance,
     chain,
     directusUser,
     connect,
     connectWith,
     disconnect,
     refreshBalance,
+    refreshInternalBalance,
     requireWallet,
   };
 

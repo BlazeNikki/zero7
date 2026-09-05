@@ -3,10 +3,15 @@ import type { Risk, Rows, Ball, RoundResult, BetRecord, Seeds } from './types';
 import {
   genSeeds, generatePath, getMultiplier, MAX_BALLS, MIN_BET, MAX_BET,
 } from './engine';
+import { placeBet, settleBet, type SolNetwork } from '@/lib/solana-bet';
+import { useWallet } from '@/lib/wallet';
+import { useNetwork } from '@/lib/network-context';
 
 let ballIdCounter = 0;
 
 export function usePlinkoGame() {
+  const wallet = useWallet();
+  const { network } = useNetwork();
   const [betAmount, setBetAmount] = useState(0.01);
   const [rows, setRows] = useState<Rows>(12);
   const [risk, setRisk] = useState<Risk>('medium');
@@ -21,6 +26,7 @@ export function usePlinkoGame() {
   const [autoTarget, setAutoTarget] = useState(0);
   const [autoProfit, setAutoProfit] = useState(0);
   const [lastWin, setLastWin] = useState<{ amount: number; multiplier: number; slot: number; ballId: number } | null>(null);
+  const [isPlacingBet, setIsPlacingBet] = useState(false);
 
   const seedsRef = useRef(seeds);
   const nonceRef = useRef(0);
@@ -52,14 +58,28 @@ export function usePlinkoGame() {
     return () => { cancelled = true; };
   }, []);
 
-  const dropBall = useCallback(() => {
+  const dropBall = useCallback(async () => {
     if (!seedsReady) return;
     if (balls.length >= MAX_BALLS) return;
+    if (!wallet.address) return;
+
+    const currentBet = betAmountRef.current;
+    setIsPlacingBet(true);
+
+    // Place on-chain bet
+    let betId: string | null = null;
+    try {
+      const result = await placeBet(wallet.address, 'plinko', currentBet, network as SolNetwork);
+      betId = result.betId;
+    } catch {
+      setIsPlacingBet(false);
+      return;
+    }
+    setIsPlacingBet(false);
 
     const currentNonce = nonceRef.current;
     const currentRows = rowsRef.current;
     const currentRisk = riskRef.current;
-    const currentBet = betAmountRef.current;
     const isAuto = autoModeRef.current;
 
     generatePath(
@@ -90,10 +110,13 @@ export function usePlinkoGame() {
       };
       setNonce((n) => n + 1);
       setBalls((prev) => (prev.length >= MAX_BALLS ? prev : [...prev, ball]));
+      // Store betId for settle when ball lands
+      ballBetIdsRef.current.set(ball.id, betId);
     });
-  }, [seedsReady, balls.length]);
+  }, [seedsReady, balls.length, wallet.address, network]);
 
   const processedBallsRef = useRef<Set<number>>(new Set());
+  const ballBetIdsRef = useRef<Map<number, string | null>>(new Map());
 
   const removeBall = useCallback((id: number) => {
     if (processedBallsRef.current.has(id)) return;
@@ -131,6 +154,15 @@ export function usePlinkoGame() {
     setLastWin({ amount: ball.payout, multiplier: ball.multiplier, slot: ball.slot, ballId: id });
     if (ball.isAuto) {
       setAutoProfit((p) => p + (ball.payout - bet));
+    }
+    // Settle on-chain bet
+    const ballBetId = ballBetIdsRef.current.get(id);
+    ballBetIdsRef.current.delete(id);
+    if (ballBetId) {
+      const isWin = ball.payout > bet;
+      settleBet(ballBetId, isWin ? 'win' : 'loss', isWin ? ball.payout : 0, ball.multiplier, network as SolNetwork).then(() => {
+        wallet.refreshInternalBalance();
+      }).catch(() => {});
     }
   }, []);
 
@@ -197,6 +229,7 @@ export function usePlinkoGame() {
     autoTarget,
     autoProfit,
     lastWin,
+    isPlacingBet,
     setBetAmount,
     setRows,
     setRisk,

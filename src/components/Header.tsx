@@ -123,6 +123,12 @@ export default function Header({
                 <span className="text-white font-bold text-[13px] tabular-nums tracking-tight leading-none">{balanceLabel}</span>
                 {wallet.balanceUsd && <span className="text-white/30 text-[9px] tabular-nums leading-none mt-0.5">{wallet.balanceUsd}</span>}
               </div>
+              {wallet.internalBalance > 0 && (
+                <div className="flex flex-col items-start ml-2 pl-2 border-l border-white/10">
+                  <span className="text-amber-400 font-bold text-[11px] tabular-nums tracking-tight leading-none">{wallet.internalBalance.toFixed(4)} SOL</span>
+                  <span className="text-white/30 text-[8px] leading-none mt-0.5">внутренний</span>
+                </div>
+              )}
               <ChevronDown size={14} className="text-white/30 group-hover:text-white transition-colors" />
             </div>
           ) : (
@@ -190,6 +196,9 @@ export default function Header({
                   <span className="text-white font-bold text-[14px] tabular-nums tracking-tight">{balanceLabel}</span>
                   {wallet.balanceUsd && <span className="text-white/30 text-[10px] tabular-nums">{wallet.balanceUsd}</span>}
                 </div>
+                {wallet.internalBalance > 0 && (
+                  <span className="text-amber-400 font-bold text-[12px] tabular-nums">{wallet.internalBalance.toFixed(4)} SOL (внутр.)</span>
+                )}
                 <button onClick={() => wallet.disconnect()} className="text-white/40 hover:text-white text-[11px] font-bold tracking-wide transition-colors">
                   ОТКЛЮЧИТЬ
                 </button>

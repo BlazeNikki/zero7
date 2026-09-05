@@ -139,9 +139,10 @@ export default function MinesPage({ onHome }: { onHome: () => void }) {
               {game.phase === 'idle' && (
                 <button
                   onClick={() => wallet.requireWallet(() => game.startRound())}
-                  className="w-full bg-white text-black font-black text-[13px] tracking-[0.15em] rounded-lg py-3.5 hover:bg-white/90 active:bg-white/80 transition-colors"
+                  disabled={game.betState === 'sending'}
+                  className="w-full bg-white text-black font-black text-[13px] tracking-[0.15em] rounded-lg py-3.5 hover:bg-white/90 active:bg-white/80 transition-colors disabled:opacity-50"
                 >
-                  СДЕЛАТЬ СТАВКУ
+                  {game.betState === 'sending' ? 'ОБРАБОТКА...' : 'СДЕЛАТЬ СТАВКУ'}
                 </button>
               )}
               {isPlaying && (
@@ -319,9 +320,10 @@ export default function MinesPage({ onHome }: { onHome: () => void }) {
           {game.phase === 'idle' && (
             <button
               onClick={() => wallet.requireWallet(() => game.startRound())}
-              className="w-full bg-white text-black font-black text-[13px] tracking-[0.15em] rounded-lg py-3.5 hover:bg-white/90 active:bg-white/80 transition-colors"
+              disabled={game.betState === 'sending'}
+              className="w-full bg-white text-black font-black text-[13px] tracking-[0.15em] rounded-lg py-3.5 hover:bg-white/90 active:bg-white/80 transition-colors disabled:opacity-50"
             >
-              СДЕЛАТЬ СТАВКУ · {formatAmount(game.betAmount)}
+              {game.betState === 'sending' ? 'ОБРАБОТКА...' : `СДЕЛАТЬ СТАВКУ · ${formatAmount(game.betAmount)}`}
             </button>
           )}
           {isPlaying && (

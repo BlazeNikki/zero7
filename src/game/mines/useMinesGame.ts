@@ -8,8 +8,10 @@ import {
   createRoundResult,
   GRID_SIZE,
 } from './engine';
+import { useBetIntegration } from '@/lib/use-bet-integration';
 
 export function useMinesGame() {
+  const bet = useBetIntegration();
   const [phase, setPhase] = useState<Phase>('idle');
   const [grid, setGrid] = useState<Cell[]>(() => createGrid());
   const [betAmount, setBetAmount] = useState(0.01);
@@ -34,6 +36,10 @@ export function useMinesGame() {
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 
   const startRound = useCallback(async () => {
+    // Place on-chain bet first
+    const betId = await bet.startBet('mines', betAmount);
+    if (!betId) return;
+
     const newSeeds = await genSeeds();
     const positions = generateMinePositions(
       newSeeds.serverSeed,
@@ -58,7 +64,7 @@ export function useMinesGame() {
     setLastResult(null);
     setPhase('playing');
     phaseRef.current = 'playing';
-  }, [minesCount]);
+  }, [minesCount, betAmount, bet]);
 
   const revealCell = useCallback((index: number) => {
     if (phaseRef.current !== 'playing') return;
@@ -97,10 +103,12 @@ export function useMinesGame() {
           payout: 0,
           time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
         }, ...prevRecs].slice(0, 30));
+        bet.endBet('loss', 0, 0);
         setTimeout(() => {
           setPhase('idle');
           phaseRef.current = 'idle';
           setRoundNumber((n) => n + 1);
+          bet.reset();
         }, 2500);
         return next;
       }
@@ -141,10 +149,12 @@ export function useMinesGame() {
           payout,
           time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
         }, ...prevRecs].slice(0, 30));
+        bet.endBet('win', payout, m);
         setTimeout(() => {
           setPhase('idle');
           phaseRef.current = 'idle';
           setRoundNumber((n) => n + 1);
+          bet.reset();
         }, 3000);
       }
 
@@ -181,12 +191,14 @@ export function useMinesGame() {
       payout,
       time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
     }, ...prevRecs].slice(0, 30));
+    bet.endBet('win', payout, multiplier);
     setTimeout(() => {
       setPhase('idle');
       phaseRef.current = 'idle';
       setRoundNumber((n) => n + 1);
+      bet.reset();
     }, 3000);
-  }, [betAmount, minesCount, multiplier, revealedCount]);
+  }, [betAmount, minesCount, multiplier, revealedCount, bet]);
 
   const quickAmount = useCallback((type: 'half' | 'double' | 'min' | 'max') => {
     setBetAmount((prev) => {
@@ -211,6 +223,8 @@ export function useMinesGame() {
     roundNumber,
     lastResult,
     showAllMines,
+    betState: bet.betState,
+    betError: bet.error,
     setBetAmount,
     setMinesCount,
     startRound,

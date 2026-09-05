@@ -1,9 +1,9 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import {
   LayoutDashboard, Wallet, Gift, Gamepad2, Receipt, UserCircle, ShieldCheck, Lock,
   HeartHandshake, Crown, Trophy, Share2, Bell, Headphones, ChevronLeft, Plus, ArrowDownToLine,
   ArrowUpFromLine, History, Check, Upload, Smartphone, LogOut, Copy, Search, Send,
-  QrCode, AlertTriangle, X,
+  QrCode, AlertTriangle, X, Loader2,
 } from 'lucide-react';
 import {
   Card, SectionTitle, ProgressBar, Badge, Button, Input, Select, Table, TableRow, Td,
@@ -13,9 +13,14 @@ import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { fetchCabinetData, type CabinetData } from './data';
 import { useWallet, openWalletModal } from '@/lib/wallet';
 import { useNetwork } from '@/lib/network-context';
-import { NETWORK_LABELS } from '@/lib/solana-bet';
+import { NETWORK_LABELS, depositToInternalBalance, requestWithdrawal, getInternalBalance, getWithdrawals, getBetHistory } from '@/lib/solana-bet';
 import NetworkSelector from '@/components/NetworkSelector';
 import { createContext, useContext } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? 'https://arfnwjuxqidefuxgbzyw.supabase.co';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? '';
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ===== Cabinet data context =====
 const CabinetDataContext = createContext<CabinetData | null>(null);
@@ -86,8 +91,8 @@ function Dashboard({ go }: { go: (s: string) => void }) {
         <NetworkSelector />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        <BalanceCard label={`Крипто-кошелёк · ${NETWORK_LABELS[network]}`} value={wallet.isConnected ? `${wallet.balance} ${wallet.chain === 'solana' ? 'SOL' : 'ETH'}` : 'Не подключён'} sub={wallet.isConnected ? (wallet.balanceUsd || undefined) : 'Solflare'} accent={wallet.isConnected ? 'text-emerald-400' : 'text-white/40'} />
-        <BalanceCard label="Бонусный баланс" value={`${balances.bonus.toFixed(3)} SOL`} accent="text-amber-400" />
+        <BalanceCard label={`Кошелёк (on-chain) · ${NETWORK_LABELS[network]}`} value={wallet.isConnected ? `${wallet.balance} SOL` : 'Не подключён'} sub={wallet.isConnected ? (wallet.balanceUsd || undefined) : 'Solflare'} accent={wallet.isConnected ? 'text-emerald-400' : 'text-white/40'} />
+        <BalanceCard label="Внутренний баланс" value={`${wallet.internalBalance.toFixed(4)} SOL`} sub="для ставок" accent="text-amber-400" />
         <BalanceCard label="Фриспины" value={`${balances.freespins}`} sub="доступно" accent="text-sky-400" />
         <BalanceCard label="VIP Points" value={`${balances.vipPoints.toLocaleString('ru-RU')}`} sub="очков" accent="text-emerald-400" />
       </div>
@@ -130,11 +135,122 @@ function Dashboard({ go }: { go: (s: string) => void }) {
   );
 }
 
+// ===== Deposit Modal =====
+function DepositModal({ onClose, toast }: { onClose: () => void; toast: (t: string) => void }) {
+  const wallet = useWallet();
+  const { network } = useNetwork();
+  const [amount, setAmount] = useState(0.01);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleDeposit = async () => {
+    if (!wallet.address) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await depositToInternalBalance(wallet.address, amount, network);
+      toast(result.message || 'Депозит зачислен');
+      wallet.refreshInternalBalance();
+      onClose();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4" onClick={onClose}>
+      <div className="w-full max-w-[400px] bg-[#0a0a0a] border border-white/20 rounded-2xl p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-white font-black text-lg">Пополнить баланс</h2>
+          <button onClick={onClose} className="text-white/40 hover:text-white"><X size={20} /></button>
+        </div>
+        <p className="text-white/40 text-[12px] mb-4">SOL будет списан с вашего кошелька и зачислен на внутренний баланс для ставок.</p>
+        <Input label="Сумма (SOL)" type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} step="0.001" min={0.001} />
+        {error && <p className="text-red-400 text-[12px] mt-2">{error}</p>}
+        <Button className="w-full mt-4" onClick={handleDeposit} disabled={loading || amount <= 0}>
+          {loading ? <span className="flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Обработка...</span> : 'ПОПОЛНИТЬ'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ===== Withdraw Modal =====
+function WithdrawModal({ onClose, toast }: { onClose: () => void; toast: (t: string) => void }) {
+  const wallet = useWallet();
+  const { network } = useNetwork();
+  const [amount, setAmount] = useState(0.01);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleWithdraw = async () => {
+    if (!wallet.address) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await requestWithdrawal(wallet.address, amount, network);
+      toast(result.message || 'Заявка на вывод создана');
+      wallet.refreshInternalBalance();
+      onClose();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4" onClick={onClose}>
+      <div className="w-full max-w-[400px] bg-[#0a0a0a] border border-white/20 rounded-2xl p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-white font-black text-lg">Вывести средства</h2>
+          <button onClick={onClose} className="text-white/40 hover:text-white"><X size={20} /></button>
+        </div>
+        <p className="text-white/40 text-[12px] mb-2">Доступно на внутреннем балансе: <span className="text-emerald-400 font-bold">{wallet.internalBalance.toFixed(4)} SOL</span></p>
+        <p className="text-white/40 text-[12px] mb-4">SOL будет отправлен с treasury-кошелька на ваш кошелёк.</p>
+        <Input label="Сумма (SOL)" type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value))} step="0.001" min={0.001} />
+        {error && <p className="text-red-400 text-[12px] mt-2">{error}</p>}
+        <Button className="w-full mt-4" onClick={handleWithdraw} disabled={loading || amount <= 0 || amount > wallet.internalBalance}>
+          {loading ? <span className="flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Обработка...</span> : 'ВЫВЕСТИ'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ===== Section 2: Balance =====
 function BalanceSection({ toast }: { toast: (t: string) => void }) {
   const wallet = useWallet();
   const { network } = useNetwork();
   const { balances } = useCabinetData();
+  const [showDeposit, setShowDeposit] = useState(false);
+  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [withdrawals, setWithdrawals] = useState<unknown[]>([]);
+
+  const loadWithdrawals = useCallback(async () => {
+    if (!wallet.address) return;
+    try {
+      const w = await getWithdrawals(wallet.address, network);
+      setWithdrawals(w);
+    } catch { /* ignore */ }
+  }, [wallet.address, network]);
+
+  useEffect(() => { loadWithdrawals(); }, [loadWithdrawals]);
+
+  // Realtime subscription for withdrawal status updates
+  useEffect(() => {
+    if (!wallet.address) return;
+    const channel = supabase.channel('withdrawals')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'withdrawal_requests', filter: `wallet_address=eq.${wallet.address}` }, () => {
+        loadWithdrawals();
+        wallet.refreshInternalBalance();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [wallet.address, loadWithdrawals, wallet]);
+
   return (
     <div>
       <SectionTitle icon={Wallet}>Баланс</SectionTitle>
@@ -143,9 +259,9 @@ function BalanceSection({ toast }: { toast: (t: string) => void }) {
         <NetworkSelector />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-        <BalanceCard label={`Solflare кошелёк · ${NETWORK_LABELS[network]}`} value={wallet.isConnected ? `${wallet.balance} ${wallet.chain === 'solana' ? 'SOL' : 'ETH'}` : 'Не подключён'} sub={wallet.isConnected ? (wallet.balanceUsd || wallet.displayAddress || undefined) : 'Нажмите для подключения'} accent={wallet.isConnected ? 'text-emerald-400' : 'text-white/40'} />
+        <BalanceCard label={`Кошелёк (on-chain) · ${NETWORK_LABELS[network]}`} value={wallet.isConnected ? `${wallet.balance} SOL` : 'Не подключён'} sub={wallet.isConnected ? (wallet.balanceUsd || wallet.displayAddress || undefined) : 'Solflare'} accent={wallet.isConnected ? 'text-emerald-400' : 'text-white/40'} />
+        <BalanceCard label="Внутренний баланс" value={`${wallet.internalBalance.toFixed(4)} SOL`} sub="для ставок и вывода" accent="text-amber-400" />
         <BalanceCard label="Бонусный баланс" value={`${balances.bonus.toFixed(3)} SOL`} accent="text-amber-400" />
-        <BalanceCard label="Средства в обработке" value={`${balances.inProcessing.toFixed(3)} SOL`} accent="text-amber-400" />
         <BalanceCard label="Всего депозитов" value={`${balances.totalDeposits.toFixed(3)} SOL`} accent="text-emerald-400" />
         <BalanceCard label="Всего выводов" value={`${balances.totalWithdrawals.toFixed(3)} SOL`} accent="text-sky-400" />
         <BalanceCard label="Фриспины" value={`${balances.freespins}`} sub="доступно" accent="text-sky-400" />
@@ -166,11 +282,34 @@ function BalanceSection({ toast }: { toast: (t: string) => void }) {
           </div>
         </Card>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <Button onClick={() => wallet.requireWallet(() => toast('Заявка на пополнение создана'))}><span className="flex items-center justify-center gap-2"><ArrowDownToLine size={16} strokeWidth={2.5} /> ПОПОЛНИТЬ</span></Button>
-        <Button variant="ghost" onClick={() => wallet.requireWallet(() => toast('Создана заявка на вывод'))}><span className="flex items-center justify-center gap-2"><ArrowUpFromLine size={16} strokeWidth={2.5} /> ВЫВЕСТИ</span></Button>
-        <Button variant="ghost" onClick={() => wallet.requireWallet(() => toast('Открыта история операций'))}><span className="flex items-center justify-center gap-2"><History size={16} strokeWidth={2.5} /> ИСТОРИЯ</span></Button>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        <Button onClick={() => wallet.requireWallet(() => setShowDeposit(true))}><span className="flex items-center justify-center gap-2"><ArrowDownToLine size={16} strokeWidth={2.5} /> ПОПОЛНИТЬ</span></Button>
+        <Button variant="ghost" onClick={() => wallet.requireWallet(() => setShowWithdraw(true))}><span className="flex items-center justify-center gap-2"><ArrowUpFromLine size={16} strokeWidth={2.5} /> ВЫВЕСТИ</span></Button>
+        <Button variant="ghost" onClick={() => wallet.requireWallet(() => toast('История операций'))}><span className="flex items-center justify-center gap-2"><History size={16} strokeWidth={2.5} /> ИСТОРИЯ</span></Button>
       </div>
+
+      {/* Withdrawal history */}
+      {withdrawals.length > 0 && (
+        <Card className="p-4">
+          <h4 className="text-white font-black text-[13px] tracking-[0.15em] mb-4">ЗАЯВКИ НА ВЫВОД</h4>
+          <Table headers={['Дата', 'Сумма', 'Статус', 'Tx']}>
+            {withdrawals.map((r) => {
+              const w = r as { id: string; amount_sol: number; status: string; tx_signature: string | null; created_at: string };
+              return (
+                <TableRow key={w.id}>
+                  <Td className="text-white/50 whitespace-nowrap">{new Date(w.created_at).toLocaleString('ru-RU')}</Td>
+                  <Td className="text-white font-bold tabular-nums">{w.amount_sol.toFixed(4)} SOL</Td>
+                  <Td><Badge status={w.status === 'processed' ? 'completed' : w.status === 'failed' ? 'rejected' : 'pending'} /></Td>
+                  <Td className="text-white/30 text-[11px] font-mono truncate max-w-[120px]">{w.tx_signature ?? '—'}</Td>
+                </TableRow>
+              );
+            })}
+          </Table>
+        </Card>
+      )}
+
+      {showDeposit && <DepositModal onClose={() => setShowDeposit(false)} toast={toast} />}
+      {showWithdraw && <WithdrawModal onClose={() => setShowWithdraw(false)} toast={toast} />}
     </div>
   );
 }
@@ -214,41 +353,67 @@ function BonusesSection() {
 
 // ===== Section 4: Game history =====
 function GameHistorySection() {
-  const { gameHistory } = useCabinetData();
-  const [period, setPeriod] = useState('today');
+  const wallet = useWallet();
+  const { network } = useNetwork();
+  const { gameHistory: mockHistory } = useCabinetData();
+  const [realHistory, setRealHistory] = useState<unknown[]>([]);
   const [gameFilter, setGameFilter] = useState('all');
   const [page, setPage] = useState(1);
-  const games = [...new Set(gameHistory.map((g) => g.game))];
-  let rows = gameHistory;
-  if (gameFilter !== 'all') rows = rows.filter((r) => r.game === gameFilter);
+
+  const loadHistory = useCallback(async () => {
+    if (!wallet.address) return;
+    try {
+      const h = await getBetHistory(wallet.address, network, 50);
+      setRealHistory(h);
+    } catch { /* ignore */ }
+  }, [wallet.address, network]);
+
+  useEffect(() => { loadHistory(); }, [loadHistory]);
+
+  // Realtime subscription for new game history entries
+  useEffect(() => {
+    if (!wallet.address) return;
+    const channel = supabase.channel('game_history')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'game_history', filter: `wallet_address=eq.${wallet.address}` }, () => {
+        loadHistory();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [wallet.address, loadHistory]);
+
+  const games = [...new Set(realHistory.map((r) => (r as { game_slug: string }).game_slug))];
+  let rows = realHistory;
+  if (gameFilter !== 'all') rows = rows.filter((r) => (r as { game_slug: string }).game_slug === gameFilter);
   const perPage = 5;
   const totalPages = Math.ceil(rows.length / perPage);
   const pageRows = rows.slice((page - 1) * perPage, page * perPage);
+
   return (
     <div>
       <SectionTitle icon={Gamepad2}>История игр</SectionTitle>
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
-        <FilterTabs tabs={['today', 'week', 'month', 'period']} active={period} onChange={setPeriod} />
         <Select value={gameFilter} onChange={(e) => { setGameFilter(e.target.value); setPage(1); }} className="sm:w-48">
           <option value="all">Все игры</option>
           {games.map((g) => <option key={g} value={g}>{g}</option>)}
         </Select>
       </div>
       <Card className="p-4">
-        <Table headers={['Дата', 'Игра', 'Провайдер', 'Ставка', 'Выигрыш', 'Результат', 'Статус']}>
-          {pageRows.map((r) => (
-            <TableRow key={r.id}>
-              <Td className="text-white/50 whitespace-nowrap">{r.date}</Td>
-              <Td className="text-white font-semibold">{r.game}</Td>
-              <Td className="text-white/40">{r.provider}</Td>
-              <Td className="text-white/60 tabular-nums">{r.bet.toFixed(3)} SOL</Td>
-              <Td className={`tabular-nums font-bold ${r.win > 0 ? 'text-emerald-400' : 'text-white/30'}`}>{r.win > 0 ? `${r.win.toFixed(3)} SOL` : '—'}</Td>
-              <Td><span className={`text-[12px] font-bold ${r.win > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{r.win > 0 ? `+${(r.win - r.bet).toFixed(3)}` : `-${r.bet.toFixed(3)}`} SOL</span></Td>
-              <Td><Badge status={r.status} /></Td>
-            </TableRow>
-          ))}
+        <Table headers={['Дата', 'Игра', 'Ставка', 'Выигрыш', 'Результат', 'Статус']}>
+          {pageRows.map((r) => {
+            const row = r as { id: string; created_at: string; game_slug: string; bet_amount: number; payout_amount: number; result: string; bet_status: string };
+            return (
+              <TableRow key={row.id}>
+                <Td className="text-white/50 whitespace-nowrap">{new Date(row.created_at).toLocaleString('ru-RU')}</Td>
+                <Td className="text-white font-semibold capitalize">{row.game_slug}</Td>
+                <Td className="text-white/60 tabular-nums">{Number(row.bet_amount).toFixed(3)} SOL</Td>
+                <Td className={`tabular-nums font-bold ${Number(row.payout_amount) > 0 ? 'text-emerald-400' : 'text-white/30'}`}>{Number(row.payout_amount) > 0 ? `${Number(row.payout_amount).toFixed(3)} SOL` : '—'}</Td>
+                <Td><span className={`text-[12px] font-bold ${row.result === 'win' ? 'text-emerald-400' : row.result === 'loss' ? 'text-red-400' : 'text-amber-400'}`}>{row.result === 'win' ? 'Выигрыш' : row.result === 'loss' ? 'Проигрыш' : 'Ожидание'}</span></Td>
+                <Td><Badge status={row.bet_status === 'completed' ? 'completed' : row.bet_status === 'active' ? 'pending' : 'pending'} /></Td>
+              </TableRow>
+            );
+          })}
         </Table>
-        {pageRows.length === 0 && <p className="text-white/30 text-[13px] text-center py-8">Нет записей за выбранный период</p>}
+        {pageRows.length === 0 && <p className="text-white/30 text-[13px] text-center py-8">Нет записей. Сделайте первую ставку!</p>}
         <Pagination page={page} total={totalPages} onChange={setPage} />
       </Card>
     </div>

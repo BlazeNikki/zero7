@@ -268,6 +268,131 @@ export async function getWalletBalance(
 }
 
 /**
+ * Deposit SOL to internal balance (sends on-chain tx, then calls edge function).
+ */
+export async function depositToInternalBalance(
+  walletAddress: string,
+  amountSol: number,
+  network: SolNetwork,
+): Promise<{ status: string; internalBalance?: number; message?: string }> {
+  const txSignature = await sendBetTransaction(walletAddress, amountSol, network);
+
+  const res = await fetch(BET_PROCESS_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({
+      action: 'deposit',
+      walletAddress,
+      amountSol,
+      txSignature,
+      network,
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to deposit');
+  return { status: data.status, internalBalance: data.internalBalance, message: data.message };
+}
+
+/**
+ * Request a withdrawal from internal balance.
+ */
+export async function requestWithdrawal(
+  walletAddress: string,
+  amountSol: number,
+  network: SolNetwork,
+): Promise<{ withdrawalId: string; status: string; txSignature?: string; internalBalance?: number; message?: string; explorerUrl?: string }> {
+  const res = await fetch(BET_PROCESS_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({
+      action: 'request-withdrawal',
+      walletAddress,
+      amountSol,
+      network,
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to request withdrawal');
+  return {
+    withdrawalId: data.withdrawalId,
+    status: data.status,
+    txSignature: data.txSignature,
+    internalBalance: data.internalBalance,
+    message: data.message,
+    explorerUrl: data.explorerUrl,
+  };
+}
+
+/**
+ * Get internal balance (off-chain winnings/deposit balance).
+ */
+export async function getInternalBalance(
+  walletAddress: string,
+  network: SolNetwork,
+): Promise<{ balanceSol: number; totalDeposited: number; totalWithdrawn: number; totalWinnings: number; totalLosses: number }> {
+  const res = await fetch(BET_PROCESS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
+    body: JSON.stringify({ action: 'get-internal-balance', walletAddress, network }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to get internal balance');
+  return {
+    balanceSol: data.balanceSol ?? 0,
+    totalDeposited: data.totalDeposited ?? 0,
+    totalWithdrawn: data.totalWithdrawn ?? 0,
+    totalWinnings: data.totalWinnings ?? 0,
+    totalLosses: data.totalLosses ?? 0,
+  };
+}
+
+/**
+ * Get withdrawal history for a wallet.
+ */
+export async function getWithdrawals(
+  walletAddress: string,
+  network: SolNetwork,
+  limit = 20,
+  offset = 0,
+): Promise<unknown[]> {
+  const res = await fetch(BET_PROCESS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
+    body: JSON.stringify({ action: 'get-withdrawals', walletAddress, limit, offset, network }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to get withdrawals');
+  return data.withdrawals ?? [];
+}
+
+/**
+ * Get deposit history for a wallet.
+ */
+export async function getDeposits(
+  walletAddress: string,
+  network: SolNetwork,
+  limit = 20,
+  offset = 0,
+): Promise<unknown[]> {
+  const res = await fetch(BET_PROCESS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY },
+    body: JSON.stringify({ action: 'get-deposits', walletAddress, limit, offset, network }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to get deposits');
+  return data.deposits ?? [];
+}
+
+/**
  * Generate a Solana Explorer URL for a transaction on the given network.
  */
 export function getExplorerUrl(signature: string, network: SolNetwork): string {

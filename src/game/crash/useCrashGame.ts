@@ -3,6 +3,9 @@ import type { Phase, BetSlotState, SimPlayer, RoundResult, BetRecord } from './t
 import { genSeeds, calcCrashPoint, multiplierAt, genSimPlayers, simPlayerCashoutTarget } from './engine';
 
 import { MIN_SOL_BET, MAX_SOL_BET, SOL_STEP } from '@/lib/sol-bet';
+import { placeBet, settleBet, type SolNetwork } from '@/lib/solana-bet';
+import { useWallet } from '@/lib/wallet';
+import { useNetwork } from '@/lib/network-context';
 
 const BETTING_DURATION = 6000; // 6s betting phase
 const RESULT_DURATION = 3000; // 3s result pause
@@ -26,6 +29,8 @@ type GameLoop = {
 };
 
 export function useCrashGame(): GameLoop {
+  const wallet = useWallet();
+  const { network } = useNetwork();
   const [phase, setPhase] = useState<Phase>('betting');
   const [multiplier, setMultiplier] = useState(1);
   const [countdown, setCountdown] = useState(BETTING_DURATION);
@@ -50,6 +55,8 @@ export function useCrashGame(): GameLoop {
   const slotsRef = useRef(betSlots);
   const roundNumRef = useRef(1);
   const hiddenSinceRef = useRef<number | null>(null);
+  const betIdsRef = useRef<(string | null)[]>([null, null]);
+  const [betState, setBetState] = useState<Record<0 | 1, 'idle' | 'sending' | 'active' | 'error'>>({ 0: 'idle', 1: 'idle' });
 
   useEffect(() => { slotsRef.current = betSlots; }, [betSlots]);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
@@ -156,6 +163,14 @@ export function useCrashGame(): GameLoop {
               payout: 0,
               time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
             });
+            // Settle on-chain bet as loss
+            const betId = betIdsRef.current[i];
+            if (betId) {
+              settleBet(betId, 'loss', 0, undefined, network as SolNetwork).then(() => {
+                wallet.refreshInternalBalance();
+                betIdsRef.current[i] = null;
+              }).catch(() => {});
+            }
           }
         }
         if (newRecords.length) setBetRecords((prev) => [...newRecords, ...prev].slice(0, 30));
@@ -259,15 +274,33 @@ export function useCrashGame(): GameLoop {
         payout: winAmount,
         time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
       }, ...prev].slice(0, 30));
+      // Settle on-chain bet as win
+      const betId = betIdsRef.current[slot];
+      if (betId) {
+        settleBet(betId, 'win', winAmount, m, network as SolNetwork).then(() => {
+          wallet.refreshInternalBalance();
+          betIdsRef.current[slot] = null;
+        }).catch(() => {});
+      }
     }
   };
 
-  const placeBet = (slot: 0 | 1) => {
-    setBetSlots((prev) => {
-      const next = [...prev] as [BetSlotState, BetSlotState];
-      next[slot] = { ...next[slot], placed: true, cashedOut: false, cashoutMultiplier: null, winAmount: null };
-      return next;
-    });
+  const placeBet = async (slot: 0 | 1) => {
+    if (!wallet.address) return;
+    const amount = betSlots[slot].amount;
+    setBetState((p) => ({ ...p, [slot]: 'sending' }));
+    try {
+      const result = await placeBet(wallet.address, 'crash', amount, network as SolNetwork);
+      betIdsRef.current[slot] = result.betId;
+      setBetSlots((prev) => {
+        const next = [...prev] as [BetSlotState, BetSlotState];
+        next[slot] = { ...next[slot], placed: true, cashedOut: false, cashoutMultiplier: null, winAmount: null };
+        return next;
+      });
+      setBetState((p) => ({ ...p, [slot]: 'active' }));
+    } catch {
+      setBetState((p) => ({ ...p, [slot]: 'error' }));
+    }
   };
 
   const cashOut = (slot: 0 | 1) => {
@@ -294,6 +327,7 @@ export function useCrashGame(): GameLoop {
     revealedSeed,
     betSlots,
     betRecords,
+    betState,
     placeBet,
     cashOut,
     updateBetSlot,

@@ -202,6 +202,7 @@ export default function CrashPage({ onHome }: { onHome: () => void }) {
                 state={game.betSlots[0]}
                 phase={game.phase}
                 multiplier={game.multiplier}
+                betState={game.betState[0]}
                 onPlace={() => wallet.requireWallet(() => game.placeBet(0))}
                 onCashOut={() => wallet.requireWallet(() => game.cashOut(0))}
                 onUpdate={(patch) => wallet.requireWallet(() => game.updateBetSlot(0, patch))}
@@ -211,6 +212,7 @@ export default function CrashPage({ onHome }: { onHome: () => void }) {
                 state={game.betSlots[1]}
                 phase={game.phase}
                 multiplier={game.multiplier}
+                betState={game.betState[1]}
                 onPlace={() => wallet.requireWallet(() => game.placeBet(1))}
                 onCashOut={() => wallet.requireWallet(() => game.cashOut(1))}
                 onUpdate={(patch) => wallet.requireWallet(() => game.updateBetSlot(1, patch))}
@@ -379,6 +381,7 @@ export default function CrashPage({ onHome }: { onHome: () => void }) {
             state={game.betSlots[0]}
             phase={game.phase}
             multiplier={game.multiplier}
+            betState={game.betState[0]}
             onPlace={() => wallet.requireWallet(() => game.placeBet(0))}
             onCashOut={() => wallet.requireWallet(() => game.cashOut(0))}
             onUpdate={(patch) => wallet.requireWallet(() => game.updateBetSlot(0, patch))}
