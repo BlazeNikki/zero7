@@ -34,9 +34,12 @@ Deno.serve(async (req: Request) => {
   try {
     const body = await req.text();
 
-    // Determine network from solana-client header (sent by getConnection in solana-bet.ts)
-    const network = req.headers.get("solana-client") || "mainnet";
+    // Determine network from URL query param (?network=devnet) or solana-client header
+    const url = new URL(req.url);
+    const network = url.searchParams.get("network") || req.headers.get("solana-client") || "mainnet";
     const endpoints = NETWORK_ENDPOINTS[network] || NETWORK_ENDPOINTS.mainnet;
+
+    console.log(`[solana-rpc] network=${network} method=${req.method} body_len=${body.length}`);
 
     for (const endpoint of endpoints) {
       try {

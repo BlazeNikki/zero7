@@ -1,9 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { Connection, PublicKey } from '@solana/web3.js';
 import { getOrCreateDirectusUser, type DirectusUser } from './directus';
 import { setAuthToken, getAuthToken, clearAuthToken } from './auth';
 import { useNetwork } from './network-context';
-import { getConnection } from './solana-bet';
 
 type WalletProviderType = 'solflare' | 'phantom';
 
@@ -50,7 +48,6 @@ export function useWallet() {
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? 'https://arfnwjuxqidefuxgbzyw.supabase.co';
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFyZm53anV4cWlkZWZ1eGdienl3Iiwicm9sIjoiYW5vbiIsImlhdCI6MTc4NjUyODA1OCwiZXhwIjoyMTAyMTA0MDU4fQ.ceVL34t3fk7dU-FQVMYHG8xobknNy2sNU9Kp-oRCfDU';
 const AUTH_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/auth-wallet`;
-const SOL_RPC_PROXY = `${SUPABASE_URL}/functions/v1/solana-rpc`;
 
 function shortenAddress(addr: string): string {
   if (addr.length <= 10) return addr;
@@ -161,10 +158,33 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const fetchBalance = useCallback(async (addr: string) => {
     try {
-      // Use network-aware connection so devnet queries go to devnet RPC
-      const connection = getConnection(network);
-      const lamports = await connection.getBalance(new PublicKey(addr));
+      // Direct JSON-RPC POST to the proxy — bypass @solana/web3.js to avoid
+      // any header/URL-param dropping in the browser bundle.
+      const proxyUrl = `${SUPABASE_URL}/functions/v1/solana-rpc?network=${network}`;
+      console.log(`[wallet] fetchBalance addr=${addr} network=${network}`);
+      const rpcRes = await fetch(proxyUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'getBalance',
+          params: [addr],
+        }),
+      });
+      if (!rpcRes.ok) {
+        throw new Error(`RPC proxy returned ${rpcRes.status}`);
+      }
+      const rpcData = await rpcRes.json();
+      if (rpcData.error) {
+        throw new Error(rpcData.error.message || 'RPC error');
+      }
+      const lamports = rpcData.result?.value ?? 0;
       const sol = lamports / 1e9;
+      console.log(`[wallet] getBalance result: lamports=${lamports} sol=${sol}`);
       setBalance(sol.toFixed(4));
       try {
         const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
@@ -174,7 +194,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       } catch {
         setBalanceUsd('');
       }
-    } catch {
+    } catch (err) {
+      console.error(`[wallet] fetchBalance failed:`, err);
       setBalance('0.00');
       setBalanceUsd('');
     }

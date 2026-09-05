@@ -59,10 +59,11 @@ function getTreasuryWallet(network: SolNetwork): string {
 }
 
 export function getConnection(network: SolNetwork): Connection {
-  // Use the Solana RPC proxy for all networks — the proxy handles routing
-  return new Connection(SOL_RPC_PROXY, {
+  // Pass network via query param so @solana/web3.js can't drop it.
+  // The proxy reads ?network= to route to the correct Solana cluster.
+  const proxyUrl = `${SOL_RPC_PROXY}?network=${network}`;
+  return new Connection(proxyUrl, {
     httpHeaders: { apikey: SUPABASE_ANON_KEY, 'solana-client': network },
-    fetch: window.fetch.bind(window),
   });
 }
 
