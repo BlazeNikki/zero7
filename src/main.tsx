@@ -7,10 +7,10 @@ import './index.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <WalletProvider>
-      <NetworkProvider>
+    <NetworkProvider>
+      <WalletProvider>
         <App />
-      </NetworkProvider>
-    </WalletProvider>
+      </WalletProvider>
+    </NetworkProvider>
   </StrictMode>
 );

@@ -2,6 +2,8 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { Connection, PublicKey } from '@solana/web3.js';
 import { getOrCreateDirectusUser, type DirectusUser } from './directus';
 import { setAuthToken, getAuthToken, clearAuthToken } from './auth';
+import { useNetwork } from './network-context';
+import { getConnection } from './solana-bet';
 
 type WalletProviderType = 'solflare' | 'phantom';
 
@@ -49,7 +51,6 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL ?? 'https://arfnwjuxqidef
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFyZm53anV4cWlkZWZ1eGdienl3Iiwicm9sIjoiYW5vbiIsImlhdCI6MTc4NjUyODA1OCwiZXhwIjoyMTAyMTA0MDU4fQ.ceVL34t3fk7dU-FQVMYHG8xobknNy2sNU9Kp-oRCfDU';
 const AUTH_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/auth-wallet`;
 const SOL_RPC_PROXY = `${SUPABASE_URL}/functions/v1/solana-rpc`;
-const SOL_CONNECTION = new Connection(SOL_RPC_PROXY, { httpHeaders: { apikey: SUPABASE_ANON_KEY }, fetch: window.fetch.bind(window) });
 
 function shortenAddress(addr: string): string {
   if (addr.length <= 10) return addr;
@@ -156,10 +157,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [directusUser, setDirectusUser] = useState<DirectusUser | null>(null);
   const [gateOpen, setGateOpen] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
+  const { network } = useNetwork();
 
   const fetchBalance = useCallback(async (addr: string) => {
     try {
-      const lamports = await SOL_CONNECTION.getBalance(new PublicKey(addr));
+      // Use network-aware connection so devnet queries go to devnet RPC
+      const connection = getConnection(network);
+      const lamports = await connection.getBalance(new PublicKey(addr));
       const sol = lamports / 1e9;
       setBalance(sol.toFixed(4));
       try {
@@ -174,7 +178,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setBalance('0.00');
       setBalanceUsd('');
     }
-  }, []);
+  }, [network]);
 
   const authenticateWithServer = useCallback(async (addr: string, provider: 'solflare' | 'phantom'): Promise<boolean> => {
     try {
@@ -429,6 +433,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [isConnected, address, refreshBalance]);
 
+  // Re-fetch balance when network changes (e.g. switching from mainnet to devnet)
+  useEffect(() => {
+    if (isConnected && address) {
+      fetchBalance(address);
+    }
+  }, [network, isConnected, address, fetchBalance]);
+
   // Wallet modal trigger listener
   useEffect(() => {
     const listener: ModalListener = () => setWalletModalOpen(true);
@@ -437,13 +448,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const requireWallet = useCallback((action?: () => void): boolean => {
-    if (isConnected && isAuthed) {
+    if (isConnected) {
       if (action) action();
       return true;
     }
     setGateOpen(true);
     return false;
-  }, [isConnected, isAuthed]);
+  }, [isConnected]);
 
   const value: WalletState = {
     isConnected,

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown, FlaskConical, Rocket } from 'lucide-react';
+import { ChevronDown, FlaskConical, Rocket, AlertTriangle } from 'lucide-react';
 import { useNetwork } from '@/lib/network-context';
 import { NETWORK_SELECTOR_ENABLED, NETWORK_LABELS, type SolNetwork } from '@/lib/solana-bet';
 
@@ -16,7 +16,7 @@ const NETWORK_DOT_COLORS: Record<SolNetwork, string> = {
 };
 
 export default function NetworkSelector() {
-  const { network, setNetwork } = useNetwork();
+  const { network, setNetwork, treasuryConfigured } = useNetwork();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -30,7 +30,6 @@ export default function NetworkSelector() {
   }, [open]);
 
   if (!NETWORK_SELECTOR_ENABLED) {
-    // In production without the flag, show a static mainnet badge only
     return (
       <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
@@ -49,10 +48,13 @@ export default function NetworkSelector() {
       >
         <span className={`w-1.5 h-1.5 rounded-full ${NETWORK_DOT_COLORS[network]}`} />
         <span className="text-white/80 text-[10px] font-bold tracking-wider uppercase">{NETWORK_LABELS[network]}</span>
+        {!treasuryConfigured && network !== 'mainnet' && (
+          <AlertTriangle size={11} className="text-amber-400" />
+        )}
         <ChevronDown size={12} className="text-white/40" />
       </button>
       {open && (
-        <div className="absolute top-full right-0 mt-1 w-44 bg-[#0a0a0a] border border-white/20 rounded-xl shadow-2xl z-50 overflow-hidden">
+        <div className="absolute top-full right-0 mt-1 w-48 bg-[#0a0a0a] border border-white/20 rounded-xl shadow-2xl z-50 overflow-hidden">
           {options.map((n) => {
             const OptIcon = NETWORK_ICONS[n];
             return (
@@ -72,9 +74,16 @@ export default function NetworkSelector() {
             );
           })}
           <div className="px-3 py-2 border-t border-white/10">
-            <p className="text-white/30 text-[9px] leading-relaxed">
-              Тестовые сети используют ненастоящие SOL. Не отправляйте реальные средства на devnet/testnet.
-            </p>
+            {!treasuryConfigured && network !== 'mainnet' ? (
+              <p className="text-amber-400/80 text-[9px] leading-relaxed flex items-start gap-1">
+                <AlertTriangle size={10} className="mt-px shrink-0" />
+                Выплаты для этой сети не настроены. Ставки доступны, но выигрыши не будут отправлены.
+              </p>
+            ) : (
+              <p className="text-white/30 text-[9px] leading-relaxed">
+                Тестовые сети используют ненастоящие SOL. Не отправляйте реальные средства на devnet/testnet.
+              </p>
+            )}
           </div>
         </div>
       )}

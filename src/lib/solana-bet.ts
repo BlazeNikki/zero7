@@ -19,18 +19,15 @@ export const NETWORK_COLORS: Record<SolNetwork, string> = {
   mainnet: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
 };
 
-// Visibility: in production, only mainnet is shown to regular users.
-// Devnet/testnet are shown when the env flag is set or on localhost.
-export const NETWORK_SELECTOR_ENABLED =
-  import.meta.env.VITE_ENABLE_NETWORK_SELECTOR === 'true' ||
-  import.meta.env.DEV === true ||
-  window.location.hostname === 'localhost';
+// Network selector is always visible to all users.
+export const NETWORK_SELECTOR_ENABLED = true;
 
 // Treasury wallets per network — fetched from edge function get-config
 let treasuryWallets: Partial<Record<SolNetwork, string>> = {};
 
 export async function fetchNetworkConfig(network: SolNetwork): Promise<{
   treasuryWallet: string;
+  treasuryConfigured: boolean;
   rpcUrl: string;
   minBet: number;
   maxBet: number;
@@ -48,6 +45,7 @@ export async function fetchNetworkConfig(network: SolNetwork): Promise<{
   treasuryWallets[network] = data.treasuryWallet;
   return {
     treasuryWallet: data.treasuryWallet,
+    treasuryConfigured: data.treasuryConfigured ?? false,
     rpcUrl: data.rpcUrl,
     minBet: data.minBet,
     maxBet: data.maxBet,

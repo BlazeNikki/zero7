@@ -5,6 +5,7 @@ type NetworkContextValue = {
   network: SolNetwork;
   setNetwork: (n: SolNetwork) => void;
   treasuryWallet: string | null;
+  treasuryConfigured: boolean;
   rpcUrl: string | null;
   minBet: number;
   maxBet: number;
@@ -15,6 +16,7 @@ const NetworkContext = createContext<NetworkContextValue>({
   network: 'devnet',
   setNetwork: () => {},
   treasuryWallet: null,
+  treasuryConfigured: false,
   rpcUrl: null,
   minBet: 0.001,
   maxBet: 1,
@@ -34,13 +36,13 @@ function getInitialNetwork(): SolNetwork {
       return stored;
     }
   } catch { /* ignore */ }
-  // Default to devnet for testing; switch to mainnet for production
   return 'devnet';
 }
 
 export function NetworkProvider({ children }: { children: ReactNode }) {
   const [network, setNetworkState] = useState<SolNetwork>(getInitialNetwork);
   const [treasuryWallet, setTreasuryWallet] = useState<string | null>(null);
+  const [treasuryConfigured, setTreasuryConfigured] = useState(false);
   const [rpcUrl, setRpcUrl] = useState<string | null>(null);
   const [minBet, setMinBet] = useState(0.001);
   const [maxBet, setMaxBet] = useState(1);
@@ -54,10 +56,15 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    // Clear stale config from previous network before fetching new one
+    setTreasuryWallet(null);
+    setTreasuryConfigured(false);
+    setRpcUrl(null);
     fetchNetworkConfig(network)
       .then((config) => {
         if (cancelled) return;
         setTreasuryWallet(config.treasuryWallet);
+        setTreasuryConfigured(config.treasuryConfigured);
         setRpcUrl(config.rpcUrl);
         setMinBet(config.minBet);
         setMaxBet(config.maxBet);
@@ -75,6 +82,7 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
       network,
       setNetwork,
       treasuryWallet,
+      treasuryConfigured,
       rpcUrl,
       minBet,
       maxBet,
