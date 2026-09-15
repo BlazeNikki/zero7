@@ -23,6 +23,7 @@ jobs:
           VITE_SUPABASE_URL: https://arfnwjuxqidefuxgbzyw.supabase.co
           VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFyZm53anV4cWlkZWZ1eGdienl3Iiwicm9sIjoiYW5vbiIsImlhdCI6MTc4NjUyODA1OCwiZXhwIjoyMTAyMTA0MDU4fQ.ceVL34t3fk7dU-FQVMYHG8xobknNy2sNU9Kp-oRCfDU
           VITE_DIRECTUS_URL: https://admin.nrg-travel.com
+          VITE_PHANTOM_REDIRECT_URI: https://zero7.casino/auth/callback
       - name: Publish dist to deploy branch
         uses: peaceiris/actions-gh-pages@v4
         with:
